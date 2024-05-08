@@ -1,0 +1,49 @@
+{
+  "name": "vite-plugin-deploy-s3",
+  "version": "0.0.1",
+  "description": "upload dist to s3",
+  "keywords": [
+    "vite",
+    "vite-plugin",
+    "s3",
+    "deploy"
+  ],
+  "scripts": {
+    "build": "unbuild"
+  },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/main.cjs",
+  "module": "./dist/main.mjs",
+  "types": "./dist/main.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/main.mjs",
+      "require": "./dist/main.cjs"
+    }
+  },
+  "engines": {
+    "node": "^18.0.0 || >=20.0.0"
+  },
+  "author": "chenx",
+  "license": "ISC",
+  "devDependencies": {
+    "@antfu/eslint-config": "^2.16.3",
+    "@types/mime-types": "^2.1.4",
+    "@types/node": "^20.12.10",
+    "eslint": "^9.2.0",
+    "typescript": "^5.4.5",
+    "unbuild": "^2.0.0",
+    "vite": "^5.2.11"
+  },
+  "dependencies": {
+    "fast-glob": "^3.3.2",
+    "mime-types": "^2.1.35",
+    "@aws-sdk/client-s3": "^3.569.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chenx/vite-plugin-deploy-s3.git"
+  }
+}
