@@ -7,6 +7,10 @@ import { Buffer } from 'node:buffer'
 import { readFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import mime from 'mime-types'
+import { gunzip, type ZlibOptions } from 'node:zlib'
+import { promisify } from 'node:util'
+
+const gunzipAsync = promisify(gunzip)
 
 export interface S3Options {
     bucket: string;
@@ -32,6 +36,12 @@ export interface DeployOptions {
      */
     deleteUseTag?: string | { key: string, value: string }
 
+
+    /**
+     * Enable gzip compression
+     */
+    gzip?: boolean | Pick<ZlibOptions, 'level' | 'memLevel' | 'strategy'>;
+
 }
 
 
@@ -39,21 +49,48 @@ export default function deploy(options: DeployOptions): Plugin {
 
     let deleteUseTag: { key: string; value: string; } | undefined;
 
-    if(options.deleteUseTag) {
-        if(typeof options.deleteUseTag === 'string') {
+    if (options.deleteUseTag) {
+        if (typeof options.deleteUseTag === 'string') {
             deleteUseTag = { key: options.deleteUseTag, value: options.deleteUseTag }
         } else {
             deleteUseTag = options.deleteUseTag
         }
 
-        if(!deleteUseTag.key) {
+        if (!deleteUseTag.key) {
             throw new Error('deleteUseTag.key is required')
         }
 
-        if(!deleteUseTag.value) {
+        if (!deleteUseTag.value) {
             throw new Error('deleteUseTag.value is required')
         }
     }
+
+    if (!options.s3 || !options.s3.accessKeyId
+        || !options.s3.secretAccessKey
+        || !options.s3.bucket
+        || !options.s3.region
+        || !options.s3.endpoint
+        || !options.s3.prefix) {
+        throw new Error('s3 options are required')
+    }
+
+    // replace {\w+} with options.s3.bucket
+    let _endpoint = options.s3.endpoint.replace(/\{(\w+)\}/g, (_, key) => {
+        const value = options.s3[key as keyof S3Options];
+        if(typeof value !== 'string') {
+            throw new Error(`s3.${key} is required`)
+        }
+        return value
+    })
+
+    if(!_endpoint.startsWith('https://')) {
+        throw new Error('endpoint must be a valid url')
+    }
+
+    if(!_endpoint.endsWith('/')) {
+        _endpoint += '/'
+    }
+
 
     let _outDir: string;
 
@@ -70,19 +107,12 @@ export default function deploy(options: DeployOptions): Plugin {
 
         config() {
             return {
-                base: options.s3.endpoint + options.s3.prefix,
+                base: `${_endpoint}${options.s3.prefix}`,
             }
         },
 
         configResolved(config) {
             _outDir = normalizePath(isAbsolute(config.build.outDir) ? config.build.outDir : join(config.root, config.build.outDir));
-
-            if(options.deleteUseTag) {
-
-                if(typeof options.deleteUseTag === 'string') {
-                    options.deleteUseTag = { key: options.deleteUseTag, value: options.deleteUseTag }
-                }
-            }
         },
 
 
@@ -113,8 +143,15 @@ export default function deploy(options: DeployOptions): Plugin {
                 }
 
                 if (fingerprints[name]?.hash !== h) {
-                    const data = await readFile(file)
-                    await client.put(name, data, getFileMeta(file))
+                    let data = await readFile(file)
+                    const meta = getFileMeta(file)
+
+                    if (!file.endsWith('.html') && options.gzip) {
+                        data = await gunzipAsync(data, typeof options.gzip === 'object' ? options.gzip : undefined)
+                        meta.contentEncoding = 'gzip'
+                    }
+
+                    await client.put(name, data, meta)
                     logger.info(`Uploaded: ${name}`)
                 }
             }
@@ -209,20 +246,26 @@ class Client {
     }
 
     async tag(key: string, tagKey: string, tagValue: string) {
-        await this._client.putObjectTagging({
-            Bucket: this._options.bucket,
-            Key: this.normalizeKey(key),
-            Tagging: {
-                TagSet: [
-                    {
-                        Key: tagKey,
-                        Value: tagValue
-                    }
-                ]
+        try {
+            await this._client.putObjectTagging({
+                Bucket: this._options.bucket,
+                Key: this.normalizeKey(key),
+                Tagging: {
+                    TagSet: [
+                        {
+                            Key: tagKey,
+                            Value: tagValue
+                        }
+                    ]
+                }
+            })
+        } catch (err) {
+            if (err instanceof Error && err.name === 'NoSuchKey') {
+                return
             }
-        })
+            throw err
+        }
     }
-
 
     normalizeKey(key: string) {
         return this._options.prefix + (key.startsWith('/') ? key : `/${key}`)
