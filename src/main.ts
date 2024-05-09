@@ -1,6 +1,6 @@
 import type { Plugin } from 'vite'
 import { normalizePath, createLogger } from 'vite'
-import { isAbsolute, join, relative } from 'node:path';
+import { extname, isAbsolute, join, relative } from 'node:path';
 import fg from 'fast-glob'
 import { S3, ObjectCannedACL } from '@aws-sdk/client-s3'
 import { Buffer } from 'node:buffer'
@@ -135,7 +135,6 @@ export default function deploy(options: DeployOptions): Plugin {
                 if (fingerprints[name]) {
                     fingerprints[name].__processed = true
                 }
-
                 const h = await hash(file)
 
                 newFingerprints[name] = {
@@ -143,12 +142,13 @@ export default function deploy(options: DeployOptions): Plugin {
                 }
 
                 if (fingerprints[name]?.hash !== h) {
-                    let data = await readFile(file)
                     const meta = getFileMeta(file)
+                    let data = await readFile(file)
 
                     if (!file.endsWith('.html') && options.gzip) {
                         data = await gzipAsync(data, typeof options.gzip === 'object' ? options.gzip : undefined)
                         meta.contentEncoding = 'gzip'
+                        logger.info(`Compressed: ${name}(size: ${Buffer.byteLength(data)} bytes)`)
                     }
 
                     await client.put(name, data, meta)
@@ -231,6 +231,7 @@ class Client {
             Bucket: this._options.bucket,
             Key: this.normalizeKey(key),
             Body: body,
+            ContentType: options?.contentType,
             ContentLength: Buffer.byteLength(body),
             CacheControl: options?.cacheControl,
             ACL: options?.acl,
@@ -275,8 +276,12 @@ class Client {
 
 
 function getFileMeta(file: string): PutObjectOptions {
+
+    const ext = extname(file)
+    const contentType = mime.lookup(ext)
+
     const options: PutObjectOptions = {
-        contentType: mime.lookup(file) || 'application/octet-stream'
+        contentType: typeof contentType === 'string' ? contentType : 'application/octet-stream'
     }
     if (!file.endsWith('.html')) {
         options.cacheControl = 'public, max-age=31536000, immutable'

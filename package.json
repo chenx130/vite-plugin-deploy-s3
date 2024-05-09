@@ -1,6 +1,6 @@
 {
-  "name": "vite-plugin-deploy-s3",
-  "version": "0.0.3",
+  "name": "vite-plugin-deploy-to-s3",
+  "version": "0.0.8",
   "description": "upload dist to s3",
   "keywords": [
     "vite",
