@@ -7,10 +7,10 @@ import { Buffer } from 'node:buffer'
 import { readFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import mime from 'mime-types'
-import { gunzip, type ZlibOptions } from 'node:zlib'
+import { gzip, type ZlibOptions } from 'node:zlib'
 import { promisify } from 'node:util'
 
-const gunzipAsync = promisify(gunzip)
+const gzipAsync = promisify(gzip)
 
 export interface S3Options {
     bucket: string;
@@ -126,7 +126,7 @@ export default function deploy(options: DeployOptions): Plugin {
             const newFingerprints: FileFingerprintMap = {}
 
             for (const file of files) {
-                let name = normalizePath(relative(file, _outDir))
+                let name = normalizePath(relative(_outDir, file))
 
                 if (options.cleanHtmlSuffix && name.endsWith('.html')) {
                     name = name.slice(0, -5)
@@ -147,7 +147,7 @@ export default function deploy(options: DeployOptions): Plugin {
                     const meta = getFileMeta(file)
 
                     if (!file.endsWith('.html') && options.gzip) {
-                        data = await gunzipAsync(data, typeof options.gzip === 'object' ? options.gzip : undefined)
+                        data = await gzipAsync(data, typeof options.gzip === 'object' ? options.gzip : undefined)
                         meta.contentEncoding = 'gzip'
                     }
 

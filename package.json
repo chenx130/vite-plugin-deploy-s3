@@ -1,6 +1,6 @@
 {
   "name": "vite-plugin-deploy-s3",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "upload dist to s3",
   "keywords": [
     "vite",
@@ -39,7 +39,6 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.569.0",
-    "@aws-sdk/s3-request-presigner": "^3.569.0",
     "fast-glob": "^3.3.2",
     "mime-types": "^2.1.35"
   },
